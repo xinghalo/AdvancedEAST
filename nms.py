@@ -130,6 +130,8 @@ def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
                         # 针对后四个坐标进行平移
                         p_v = [px, py] + np.reshape(predict[ij[0], ij[1], 3:7], (2, 2))
                         # TODO 不理解score*p_v是什么意思
+                        # TODO 暂时的理解是，每个点都会预测所在文本框的左上角的坐标和右下角的坐标
+                        # TODO 然后通过各自的分值作为置信度，头预测左上，尾预测右下，最后计算一个平均值
                         quad_list[g_th, ith * 2:(ith + 1) * 2] += score * p_v
         # score_list是头和尾对应的分值
         score_list[g_th] = total_score[:, 0]
