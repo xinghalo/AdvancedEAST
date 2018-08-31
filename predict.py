@@ -18,6 +18,17 @@ def sigmoid(x):
 
 
 def cut_text_line(geo, scale_ratio_w, scale_ratio_h, im_array, img_path, s):
+    """
+    切割图片
+
+    :param geo:
+    :param scale_ratio_w:
+    :param scale_ratio_h:
+    :param im_array:
+    :param img_path:
+    :param s:
+    :return:
+    """
     geo /= [scale_ratio_w, scale_ratio_h]
     p_min = np.amin(geo, axis=0)
     p_max = np.amax(geo, axis=0)
@@ -33,6 +44,15 @@ def cut_text_line(geo, scale_ratio_w, scale_ratio_h, im_array, img_path, s):
 
 
 def predict(east_detect, img_path, pixel_threshold, quiet=False):
+    """
+    预测图片
+
+    :param east_detect:
+    :param img_path:
+    :param pixel_threshold:
+    :param quiet:
+    :return:
+    """
     img = image.load_img(img_path)
     d_wight, d_height = resize_image(img, cfg.max_predict_img_size)
     img = img.resize((d_wight, d_height), Image.NEAREST).convert('RGB')
@@ -40,25 +60,40 @@ def predict(east_detect, img_path, pixel_threshold, quiet=False):
     img = preprocess_input(img, mode='tf')
     x = np.expand_dims(img, axis=0)
     y = east_detect.predict(x)
-
+    # 取消第一维
     y = np.squeeze(y, axis=0)
+    # 每个向量的前三位通过sigmoid转化为0-1之间的值
     y[:, :, :3] = sigmoid(y[:, :, :3])
+    # 判断一下y矩阵里面的第一个元素是否为文本，设置了一个阈值
     cond = np.greater_equal(y[:, :, 0], pixel_threshold)
+    # 查找符合条件的像素点坐标
     activation_pixels = np.where(cond)
+    # 非极大值抑制
     quad_scores, quad_after_nms = nms(y, activation_pixels)
+
     with Image.open(img_path) as im:
+        # 重新读取图片
         im_array = image.img_to_array(im.convert('RGB'))
+        # 缩放尺寸
         d_wight, d_height = resize_image(im, cfg.max_predict_img_size)
         scale_ratio_w = d_wight / im.width
         scale_ratio_h = d_height / im.height
         im = im.resize((d_wight, d_height), Image.NEAREST).convert('RGB')
+
+        # 新建一个图片绘图
         quad_im = im.copy()
+
+        # 绘制像素点图形
         draw = ImageDraw.Draw(im)
+        # 绘制每个识别出的像素点
         for i, j in zip(activation_pixels[0], activation_pixels[1]):
             px = (j + 0.5) * cfg.pixel_size
             py = (i + 0.5) * cfg.pixel_size
             line_width, line_color = 1, 'red'
+
+            # 如果大于设置的pixel阈值，那么就认为是头或尾
             if y[i, j, 1] >= cfg.side_vertex_pixel_threshold:
+                # 如果小于 分类的阈值，则认为是头，否则是尾
                 if y[i, j, 2] < cfg.trunc_threshold:
                     line_width, line_color = 2, 'yellow'
                 elif y[i, j, 2] >= 1 - cfg.trunc_threshold:
@@ -70,26 +105,36 @@ def predict(east_detect, img_path, pixel_threshold, quiet=False):
                        (px - 0.5 * cfg.pixel_size, py - 0.5 * cfg.pixel_size)],
                       width=line_width, fill=line_color)
         im.save(img_path + '_act.jpg')
+
+
+        # 绘制边框
         quad_draw = ImageDraw.Draw(quad_im)
         txt_items = []
-        for score, geo, s in zip(quad_scores, quad_after_nms,
-                                 range(len(quad_scores))):
+        for score, geo, s in zip(quad_scores, quad_after_nms, range(len(quad_scores))):
             if np.amin(score) > 0:
+
+                # 绘制矩形框
                 quad_draw.line([tuple(geo[0]),
                                 tuple(geo[1]),
                                 tuple(geo[2]),
                                 tuple(geo[3]),
                                 tuple(geo[0])], width=2, fill='red')
+
+                # 是否切割每个文本行的图片
                 if cfg.predict_cut_text_line:
-                    cut_text_line(geo, scale_ratio_w, scale_ratio_h, im_array,
-                                  img_path, s)
+                    cut_text_line(geo, scale_ratio_w, scale_ratio_h, im_array, img_path, s)
+
+                # 坐标针对w和h进行缩放
                 rescaled_geo = geo / [scale_ratio_w, scale_ratio_h]
+                # 坐标转换为原始图像的坐标
                 rescaled_geo_list = np.reshape(rescaled_geo, (8,)).tolist()
                 txt_item = ','.join(map(str, rescaled_geo_list))
                 txt_items.append(txt_item + '\n')
             elif not quiet:
                 print('quad invalid with vertex num less then 4.')
         quad_im.save(img_path + '_predict.jpg')
+
+        # 输出坐标信息
         if cfg.predict_write2txt and len(txt_items) > 0:
             with open(img_path[:-4] + '.txt', 'w') as f_txt:
                 f_txt.writelines(txt_items)
@@ -129,10 +174,10 @@ def predict_txt(east_detect, img_path, txt_path, pixel_threshold, quiet=False):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--path', '-p',
-                        default='demo/012.png',
+                        default='demo/123.jpg',
                         help='image path')
     parser.add_argument('--threshold', '-t',
-                        default=cfg.pixel_threshold,
+                        default=0.5,
                         help='pixel activation threshold')
     return parser.parse_args()
 

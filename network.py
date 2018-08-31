@@ -19,29 +19,34 @@ class East:
         self.input_img = Input(name='input_img',
                                shape=(None, None, cfg.num_channels),
                                dtype='float32')
-        vgg16 = VGG16(input_tensor=self.input_img,
-                      weights='imagenet',
-                      include_top=False)
+
+        vgg16 = VGG16(input_tensor=self.input_img, weights='imagenet', include_top=False)
+
+        # False
         if cfg.locked_layers:
             # locked first two conv layers
-            locked_layers = [vgg16.get_layer('block1_conv1'),
-                             vgg16.get_layer('block1_conv2')]
+            locked_layers = [vgg16.get_layer('block1_conv1'), vgg16.get_layer('block1_conv2')]
             for layer in locked_layers:
                 layer.trainable = False
-        self.f = [vgg16.get_layer('block%d_pool' % i).output
-                  for i in cfg.feature_layers_range]
+
+        self.f = [vgg16.get_layer('block%d_pool' % i).output for i in cfg.feature_layers_range]
         self.f.insert(0, None)
+        # self.diff = 5-3 = 2
         self.diff = cfg.feature_layers_range[0] - cfg.feature_layers_num
 
     def g(self, i):
+        # i = 3
         # i+diff in cfg.feature_layers_range
         assert i + self.diff in cfg.feature_layers_range, \
             ('i=%d+diff=%d not in ' % (i, self.diff)) + \
             str(cfg.feature_layers_range)
+
         if i == cfg.feature_layers_num:
+            # BN -> Conv2D -> relu
             bn = BatchNormalization()(self.h(i))
             return Conv2D(32, 3, activation='relu', padding='same')(bn)
         else:
+            # 对输入进行上采样，行和列分别复制2次
             return UpSampling2D((2, 2))(self.h(i))
 
     def h(self, i):
@@ -52,6 +57,7 @@ class East:
         if i == 1:
             return self.f[i]
         else:
+            #
             concat = Concatenate(axis=-1)([self.g(i - 1), self.f[i]])
             bn1 = BatchNormalization()(concat)
             conv_1 = Conv2D(128 // 2 ** (i - 2), 1,

@@ -14,8 +14,10 @@ lambda_side_vertex_coord_loss = 1.0
 
 total_img = 10000
 validation_split_ratio = 0.1
-max_train_img_size = int(train_task_id[-3:])
-max_predict_img_size = int(train_task_id[-3:])  # 2400
+# max_train_img_size = int(train_task_id[-3:])
+# max_predict_img_size = int(train_task_id[-3:])  # 2400
+max_train_img_size = 736
+max_predict_img_size = 736  # 2400
 assert max_train_img_size in [256, 384, 512, 640, 736], \
     'max_train_img_size must in [256, 384, 512, 640, 736]'
 if max_train_img_size == 256:
@@ -60,14 +62,17 @@ if not os.path.exists('model'):
 if not os.path.exists('saved_model'):
     os.mkdir('saved_model')
 
-model_weights_path = 'model/weights_%s.{epoch:03d}-{val_loss:.3f}.h5' \
-                     % train_task_id
+model_weights_path = 'model/weights_%s.{epoch:03d}-{val_loss:.3f}.h5' % train_task_id
 saved_model_file_path = 'saved_model/east_model_%s.h5' % train_task_id
-saved_model_weights_file_path = 'saved_model/east_model_weights_%s.h5'\
-                                % train_task_id
+saved_model_weights_file_path = 'saved_model/east_model_weights_%s.h5' % train_task_id
 
-pixel_threshold = 0.9
-side_vertex_pixel_threshold = 0.9
+# pixel_threshold = 0.9
+# side_vertex_pixel_threshold = 0.9
+pixel_threshold = 0.6
+side_vertex_pixel_threshold = 0.6
 trunc_threshold = 0.1
+# 是否切割小图片
 predict_cut_text_line = False
-predict_write2txt = True
+# 是否保存坐标
+predict_write2txt = False
+horizon_pixel_extend = 1
