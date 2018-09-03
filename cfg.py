@@ -1,6 +1,7 @@
 import os
 
-train_task_id = '3T256'
+# train_task_id = '3T256'
+train_task_id = '1000'
 initial_epoch = 0
 epoch_num = 24
 lr = 1e-3
@@ -31,9 +32,9 @@ else:
 steps_per_epoch = total_img * (1 - validation_split_ratio) // batch_size
 validation_steps = total_img * validation_split_ratio // batch_size
 
-data_dir = 'icpr/'
-origin_image_dir_name = 'image_10000/'
-origin_txt_dir_name = 'txt_10000/'
+data_dir = '/Users/xingoo/PycharmProjects/AdvancedEAST/data/msra'
+origin_image_dir_name = 'image/'
+origin_txt_dir_name = 'txt/'
 train_image_dir_name = 'images_%s/' % train_task_id
 train_label_dir_name = 'labels_%s/' % train_task_id
 show_gt_image_dir_name = 'show_gt_images_%s/' % train_task_id
@@ -68,8 +69,8 @@ saved_model_weights_file_path = 'saved_model/east_model_weights_%s.h5' % train_t
 
 # pixel_threshold = 0.9
 # side_vertex_pixel_threshold = 0.9
-pixel_threshold = 0.6
-side_vertex_pixel_threshold = 0.6
+pixel_threshold = 0.95
+side_vertex_pixel_threshold = 0.95
 trunc_threshold = 0.1
 # 是否切割小图片
 predict_cut_text_line = False

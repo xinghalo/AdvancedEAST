@@ -105,8 +105,10 @@ def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
     D = region_group(region_list)
     quad_list = np.zeros((len(D), 4, 2))
     score_list = np.zeros((len(D), 4))
+
     for group, g_th in zip(D, range(len(D))):
         total_score = np.zeros((4, 2))
+        # 按照最左边的x进行排序，左上角的点仅依赖于第一个row进行预测；右下角的顶点依赖于最后一个row进行预测
         for row in group:
             for ij in region_list[row]:
                 # score 为 是否为边界像素
@@ -133,7 +135,74 @@ def nms(predict, activation_pixels, threshold=cfg.side_vertex_pixel_threshold):
                         # TODO 暂时的理解是，每个点都会预测所在文本框的左上角的坐标和右下角的坐标
                         # TODO 然后通过各自的分值作为置信度，头预测左上，尾预测右下，最后计算一个平均值
                         quad_list[g_th, ith * 2:(ith + 1) * 2] += score * p_v
+
+        # for row in group:
+        #     for ij in region_list[row]:
+        #         # score 为 是否为边界像素
+        #         score = predict[ij[0], ij[1], 1]
+        #
+        #         if score >= threshold:
+        #             # ith_score 为 是否为头
+        #             ith_score = predict[ij[0], ij[1], 2:3]
+        #             # 0.1 < ith_score < 0.9 TODO 不太理解这里的截取是在干嘛
+        #             if not (cfg.trunc_threshold <= ith_score < 1 - cfg.trunc_threshold):
+        #                 # 四舍五入取整
+        #                 # np.around([-0.5,0.5,1.5,2.5,3.5,4.5])
+        #                 # [-0.  0.  2.  2.  4.  4.]
+        #                 ith = int(np.around(ith_score))
+        #                 # 如果小于等于0.5，则total_score为前两个元素加分
+        #                 # 如果大于0.5，则total_score为后两个元素加分
+        #                 total_score[ith * 2:(ith + 1) * 2] += score
+        #                 # 针对像素分别进行x和y的扩大
+        #                 px = (ij[1] + 0.5) * cfg.pixel_size
+        #                 py = (ij[0] + 0.5) * cfg.pixel_size
+        #                 # 针对后四个坐标进行平移
+        #                 p_v = [px, py] + np.reshape(predict[ij[0], ij[1], 3:7], (2, 2))
+        #                 # TODO 不理解score*p_v是什么意思
+        #                 # TODO 暂时的理解是，每个点都会预测所在文本框的左上角的坐标和右下角的坐标
+        #                 # TODO 然后通过各自的分值作为置信度，头预测左上，尾预测右下，最后计算一个平均值
+        #                 quad_list[g_th, ith * 2:(ith + 1) * 2] += score * p_v
+
         # score_list是头和尾对应的分值
         score_list[g_th] = total_score[:, 0]
         quad_list[g_th] /= (total_score + cfg.epsilon)
+
     return score_list, quad_list
+
+def sort_group(predict, group, region_list, tag):
+    tuple_list = []
+    for row in group:
+        if tag:
+            min = 99999999
+            for i,j in region_list[row]:
+                score = predict[i, j, 1]
+                ith_score = predict[i, j, 2:3]
+                ith = int(np.around(ith_score))
+
+                if score > cfg.side_vertex_pixel_threshold \
+                        and not (cfg.trunc_threshold <= ith_score < 1 - cfg.trunc_threshold) \
+                        and ith == 0\
+                        and j < min :
+                        min = j
+
+            tuple_list.append([min, row])
+        else:
+            max = -1
+            for i,j in region_list[row]:
+                score = predict[i, j, 1]
+                ith_score = predict[i, j, 2:3]
+                ith = int(np.around(ith_score))
+                if score > cfg.side_vertex_pixel_threshold \
+                        and not (cfg.trunc_threshold <= ith_score < 1 - cfg.trunc_threshold) \
+                        and ith == 1\
+                        and j > max:
+                    max = j
+            tuple_list.append([max, row])
+
+
+    tuple_list = np.array(tuple_list)
+    tuple_list = tuple_list[tuple_list[:, 0].argsort()]
+    if tag:
+        return tuple_list[:,1]
+    else:
+        return tuple_list[:, 1][::-1]

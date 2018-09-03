@@ -16,13 +16,24 @@ def batch_reorder_vertexes(xy_list_array):
 
 
 def reorder_vertexes(xy_list):
+    """
+    调整点的顺序，分别是左上、右上、左下、右下
+    :param xy_list:
+    :return:
+    """
     reorder_xy_list = np.zeros_like(xy_list)
     # determine the first point with the smallest x,
     # if two has same x, choose that with smallest y,
+
+    # 按照x坐标值进行大小排序
     ordered = np.argsort(xy_list, axis=0)
+    # 取左边的x1和x3
     xmin1_index = ordered[0, 0]
     xmin2_index = ordered[1, 0]
+
+    # 如果x1=x3证明 图像是水平的
     if xy_list[xmin1_index, 0] == xy_list[xmin2_index, 0]:
+        # 如果y1<y3，那么就是很正常的正方形,第一个点就是x1；否则第二小的是x1
         if xy_list[xmin1_index, 1] <= xy_list[xmin2_index, 1]:
             reorder_xy_list[0] = xy_list[xmin1_index]
             first_v = xmin1_index
@@ -85,19 +96,29 @@ def resize_image(im, max_img_size=cfg.max_train_img_size):
 
 
 def preprocess():
+    # '/Users/xingoo/Documents/dataset/train_1000'
     data_dir = cfg.data_dir
+    # 原始的图片文件 image_1000
     origin_image_dir = os.path.join(data_dir, cfg.origin_image_dir_name)
+    # 原始的label文件 txt_1000 格式为八个点的坐标和文本
     origin_txt_dir = os.path.join(data_dir, cfg.origin_txt_dir_name)
+    # 输出的文件夹 images_1000
     train_image_dir = os.path.join(data_dir, cfg.train_image_dir_name)
+    # 输出的label文件夹 labels_1000
     train_label_dir = os.path.join(data_dir, cfg.train_label_dir_name)
+
     if not os.path.exists(train_image_dir):
         os.mkdir(train_image_dir)
     if not os.path.exists(train_label_dir):
         os.mkdir(train_label_dir)
+
+    # 是否显示ground_truth的背景图片
     draw_gt_quad = cfg.draw_gt_quad
+    # 显示真实的边框图 show_gt_images_1000
     show_gt_image_dir = os.path.join(data_dir, cfg.show_gt_image_dir_name)
     if not os.path.exists(show_gt_image_dir):
         os.mkdir(show_gt_image_dir)
+    # 显示真实的像素点图 show_act_images_1000
     show_act_image_dir = os.path.join(cfg.data_dir, cfg.show_act_image_dir_name)
     if not os.path.exists(show_act_image_dir):
         os.mkdir(show_act_image_dir)
@@ -108,33 +129,47 @@ def preprocess():
     for o_img_fname, _ in zip(o_img_list, tqdm(range(len(o_img_list)))):
         with Image.open(os.path.join(origin_image_dir, o_img_fname)) as im:
             # d_wight, d_height = resize_image(im)
+
+            # 获得原始尺寸，并计算缩放到标准的尺度的比例，目前是736*736
             d_wight, d_height = cfg.max_train_img_size, cfg.max_train_img_size
             scale_ratio_w = d_wight / im.width
             scale_ratio_h = d_height / im.height
             im = im.resize((d_wight, d_height), Image.NEAREST).convert('RGB')
             show_gt_im = im.copy()
+
             # draw on the img
+            # 读取标记文件
             draw = ImageDraw.Draw(show_gt_im)
-            with open(os.path.join(origin_txt_dir,
-                                   o_img_fname[:-4] + '.txt'), 'r') as f:
+            with open(os.path.join(origin_txt_dir, o_img_fname[:-4] + '.txt'), 'r', encoding='utf-8') as f:
                 anno_list = f.readlines()
+
+            # 创建(n,4,2)的大小
             xy_list_array = np.zeros((len(anno_list), 4, 2))
+
+            #
             for anno, i in zip(anno_list, range(len(anno_list))):
                 anno_colums = anno.strip().split(',')
                 anno_array = np.array(anno_colums)
                 xy_list = np.reshape(anno_array[:8].astype(float), (4, 2))
+                # 尺度缩放
                 xy_list[:, 0] = xy_list[:, 0] * scale_ratio_w
                 xy_list[:, 1] = xy_list[:, 1] * scale_ratio_h
+
+                # xy_list为缩放后的8个点的值，按照顺序对8个位置进行排序
                 xy_list = reorder_vertexes(xy_list)
+
                 xy_list_array[i] = xy_list
+                # todo 这里是对图像做了增广吗？
                 _, shrink_xy_list, _ = shrink(xy_list, cfg.shrink_ratio)
                 shrink_1, _, long_edge = shrink(xy_list, cfg.shrink_side_ratio)
                 if draw_gt_quad:
+                    # 原始框
                     draw.line([tuple(xy_list[0]), tuple(xy_list[1]),
                                tuple(xy_list[2]), tuple(xy_list[3]),
                                tuple(xy_list[0])
                                ],
                               width=2, fill='green')
+                    # 缩小框
                     draw.line([tuple(shrink_xy_list[0]),
                                tuple(shrink_xy_list[1]),
                                tuple(shrink_xy_list[2]),
@@ -144,6 +179,7 @@ def preprocess():
                               width=2, fill='blue')
                     vs = [[[0, 0, 3, 3, 0], [1, 1, 2, 2, 1]],
                           [[0, 0, 1, 1, 0], [2, 2, 3, 3, 2]]]
+                    # 头和尾的数据框
                     for q_th in range(2):
                         draw.line([tuple(xy_list[vs[long_edge][q_th][0]]),
                                    tuple(shrink_1[vs[long_edge][q_th][1]]),
@@ -153,15 +189,11 @@ def preprocess():
                                   width=3, fill='yellow')
             if cfg.gen_origin_img:
                 im.save(os.path.join(train_image_dir, o_img_fname))
-            np.save(os.path.join(
-                train_label_dir,
-                o_img_fname[:-4] + '.npy'),
-                xy_list_array)
+            np.save(os.path.join(train_label_dir,o_img_fname[:-4] + '.npy'), xy_list_array)
+
             if draw_gt_quad:
                 show_gt_im.save(os.path.join(show_gt_image_dir, o_img_fname))
-            train_val_set.append('{},{},{}\n'.format(o_img_fname,
-                                                     d_wight,
-                                                     d_height))
+            train_val_set.append('{},{},{}\n'.format(o_img_fname, d_wight, d_height))
 
     train_img_list = os.listdir(train_image_dir)
     print('found %d train images.' % len(train_img_list))
@@ -169,6 +201,8 @@ def preprocess():
     print('found %d train labels.' % len(train_label_list))
 
     random.shuffle(train_val_set)
+
+    # 10%作为验证集，90%作为测试集
     val_count = int(cfg.validation_split_ratio * len(train_val_set))
     with open(os.path.join(data_dir, cfg.val_fname), 'w') as f_val:
         f_val.writelines(train_val_set[:val_count])
